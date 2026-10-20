@@ -71,41 +71,68 @@ public class StudentFileStorage {
         }
     }
 
-    public void saveStudents(List<Student> students)
-            throws StudentStorageException {
+    
+public void saveStudents(List<Student> students)
+        throws StudentStorageException {
+
+    Path parent = filePath.toAbsolutePath().getParent();
+    Path tempFile = null;
+
+    try {
+        Files.createDirectories(parent);
+
+        tempFile = Files.createTempFile(
+                parent, "students-", ".tmp"
+        );
+
+        try (BufferedWriter writer = Files.newBufferedWriter(
+                tempFile,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE)) {
+
+            writer.write("name");
+            writer.newLine();
+
+            for (Student student : students) {
+                String escapedName =
+                        student.getName().replace("\"", "\"\"");
+                writer.write("\"" + escapedName + "\"");
+                writer.newLine();
+            }
+        }
 
         try {
-            Path parent = filePath.getParent();
-
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-
-            try (BufferedWriter writer = Files.newBufferedWriter(
+            Files.move(
+                    tempFile,
                     filePath,
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING,
-                    StandardOpenOption.WRITE)) {
-
-                writer.write("name");
-                writer.newLine();
-
-                for (Student student : students) {
-                    String escapedName =
-                            student.getName().replace("\"", "\"\"");
-                    writer.write("\"" + escapedName + "\"");
-                    writer.newLine();
-                }
-            }
-
-        } catch (IOException e) {
-            throw new StudentStorageException(
-                    "Could not save student records. Check file permissions.",
-                    e
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
+            );
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(
+                    tempFile,
+                    filePath,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
             );
         }
+
+    } catch (IOException e) {
+        throw new StudentStorageException(
+                "Could not save student records. Check file permissions.",
+                e
+        );
+    } finally {
+        if (tempFile != null) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (IOException ignored) {
+                // Temporary-file cleanup failure must not hide the main result.
+            }
+        }
     }
+}
+
 
     private String parseName(String line) {
         if (line.length() < 2
